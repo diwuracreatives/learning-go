@@ -1,89 +1,131 @@
 package data
 
 import (
+	"context"
 	"errors"
+	"log"
 	"sync"
+	"taskManager/database"
 	"taskManager/models"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type TaskService struct {
-	m      sync.Mutex
-	taskId int
-	tasks  map[int]models.Task
+	m     sync.Mutex
+	tasks map[int]models.Task
 }
 
 func NewTaskService() *TaskService {
 	return &TaskService{
-		tasks:  make(map[int]models.Task),
-		taskId: 1,
+		tasks: make(map[int]models.Task),
 	}
 }
 
 func (taskService *TaskService) CreateTask(input models.TaskInput) models.Task {
-	taskService.m.Lock()
-	defer taskService.m.Unlock()
-
 	task := models.Task{
-		ID:          taskService.taskId,
 		Title:       input.Title,
 		Description: input.Description,
 		Status:      input.Status,
 	}
 
-	taskService.tasks[task.ID] = task
-	taskService.taskId++
+	_, err := database.TaskCollection.InsertOne(context.TODO(), task)
+
+	if err != nil {
+		log.Printf("Error inserting task: %v", err)
+		return models.Task{}
+	}
 	return task
 }
 
-func (taskService *TaskService) GetTask(id int) (models.Task, bool) {
-	taskService.m.Lock()
-	defer taskService.m.Unlock()
+func (taskService *TaskService) GetTask(id primitive.ObjectID) (models.Task, bool) {
+	filter := bson.M{"_id": id}
+	result := database.TaskCollection.FindOne(context.TODO(), filter)
 
-	task, ok := taskService.tasks[id]
-	if !ok {
+	if result.Err() != nil {
+		if errors.Is(result.Err(), mongo.ErrNoDocuments) {
+			return models.Task{}, false
+		}
+		log.Printf("Error finding task with ID: %v", result.Err())
+	}
+
+	var task models.Task
+	if err := result.Decode(&task); err != nil {
+		log.Printf("Error decoding task: %v", err)
 		return models.Task{}, false
 	}
-	return task, ok
+	return task, true
 }
 
 func (taskService *TaskService) GetAllTasks() []models.Task {
-	tasks := make([]models.Task, 0)
-	taskService.m.Lock()
-	defer taskService.m.Unlock()
+	var tasks []models.Task
 
-	for _, task := range taskService.tasks {
-		tasks = append(tasks, task)
+	cursor, err := database.TaskCollection.Find(context.TODO(), bson.D{})
+
+	if err != nil {
+		log.Printf("Error finding all tasks: %v", err)
+		return nil
 	}
+
+	defer func() {
+		if closeErr := cursor.Close(context.TODO()); closeErr != nil {
+			log.Printf("Error closing cursor: %v", closeErr)
+		}
+	}()
+
+	if err = cursor.All(context.TODO(), &tasks); err != nil {
+		log.Printf("Error decoding tasks: %v", err)
+		if cursorErr := cursor.Err(); cursorErr != nil {
+			log.Printf("Cursor iteration error: %v", cursorErr)
+		}
+		return nil
+	}
+
 	return tasks
 }
 
-func (taskService *TaskService) UpdateTask(input models.TaskInput, id int) (models.Task, bool) {
-	taskService.m.Lock()
-	defer taskService.m.Unlock()
+func (taskService *TaskService) UpdateTask(input models.TaskInput, id primitive.ObjectID) (models.Task, bool) {
+	task := models.Task{
+		Title:       input.Title,
+		Description: input.Description,
+		Status:      input.Status,
+	}
 
-	task, ok := taskService.tasks[id]
-	if !ok {
+	filter := bson.M{"_id": id}
+
+	update := bson.M{
+		"$set": task,
+	}
+
+	result, err := database.TaskCollection.UpdateOne(context.TODO(), filter, update)
+
+	if err != nil {
+		log.Printf("Error updating task: %v", err)
 		return models.Task{}, false
 	}
 
-	task.Title = input.Title
-	task.Description = input.Description
-	task.Status = input.Status
-
-	taskService.tasks[id] = task
+	if result.ModifiedCount == 0 {
+		return models.Task{}, false
+	}
 
 	return task, true
 }
 
-func (taskService *TaskService) DeleteTask(id int) error {
-	taskService.m.Lock()
-	defer taskService.m.Unlock()
+func (taskService *TaskService) DeleteTask(id primitive.ObjectID) error {
+	filter := bson.M{"_id": id}
 
-	_, ok := taskService.tasks[id]
-	if !ok {
+	deletedTask, err := database.TaskCollection.DeleteOne(context.Background(), filter)
+
+	if err != nil {
+		log.Printf("Error deleting task: %v", err)
+		return err
+	}
+
+	if deletedTask.DeletedCount == 0 {
 		return errors.New("task with id not found")
 	}
 
-	delete(taskService.tasks, id)
 	return nil
 }

@@ -2,10 +2,14 @@ package main
 
 import (
 	"taskManager/data"
+	"taskManager/database"
 	"taskManager/router"
 )
 
 func main() {
+
+	database.Setup()
+
 	taskService := data.NewTaskService()
 
 	r := router.TaskManagerRouter(taskService)
@@ -14,4 +18,5 @@ func main() {
 	if err != nil {
 		return
 	}
+
 }

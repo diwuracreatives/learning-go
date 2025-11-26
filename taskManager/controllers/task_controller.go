@@ -2,12 +2,12 @@ package controllers
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 	"taskManager/data"
 	"taskManager/models"
 
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type TaskController struct {
@@ -51,9 +51,9 @@ func (taskController *TaskController) CreateTask(c *gin.Context) {
 func (taskController *TaskController) GetTask(c *gin.Context) {
 	idParam := c.Param("id")
 
-	id, err := strconv.Atoi(idParam)
+	id, err := primitive.ObjectIDFromHex(idParam)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 		return
 	}
 
@@ -68,15 +68,16 @@ func (taskController *TaskController) GetTask(c *gin.Context) {
 }
 
 func (taskController *TaskController) GetAllTasks(c *gin.Context) {
-	task := taskController.taskService.GetAllTasks()
-	c.JSON(http.StatusOK, gin.H{"data": task})
+	tasks := taskController.taskService.GetAllTasks()
+	c.JSON(http.StatusOK, gin.H{"data": tasks})
 }
 
 func (taskController *TaskController) UpdateTask(c *gin.Context) {
 	idParam := c.Param("id")
-	id, err := strconv.Atoi(idParam)
+
+	id, err := primitive.ObjectIDFromHex(idParam)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 		return
 	}
 
@@ -116,9 +117,10 @@ func (taskController *TaskController) UpdateTask(c *gin.Context) {
 
 func (taskController *TaskController) DeleteTask(c *gin.Context) {
 	idParam := c.Param("id")
-	id, err := strconv.Atoi(idParam)
+
+	id, err := primitive.ObjectIDFromHex(idParam)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 		return
 	}
 
