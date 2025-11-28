@@ -14,14 +14,11 @@ import (
 )
 
 type TaskService struct {
-	m     sync.Mutex
-	tasks map[int]models.Task
+	m sync.Mutex
 }
 
 func NewTaskService() *TaskService {
-	return &TaskService{
-		tasks: make(map[int]models.Task),
-	}
+	return &TaskService{}
 }
 
 func (taskService *TaskService) CreateTask(input models.TaskInput) models.Task {

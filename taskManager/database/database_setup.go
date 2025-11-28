@@ -10,6 +10,7 @@ import (
 )
 
 var TaskCollection *mongo.Collection
+var UserCollection *mongo.Collection
 
 func Setup() {
 	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017")
@@ -20,6 +21,7 @@ func Setup() {
 	}
 
 	TaskCollection = client.Database("taskdb").Collection("tasks")
+	UserCollection = client.Database("taskdb").Collection("users")
 
 	if TaskCollection == nil {
 		log.Fatal("Failed to create to task collection")
