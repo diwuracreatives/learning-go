@@ -1,69 +1,56 @@
-package data
+package repositories
 
 import (
 	"context"
 	"errors"
 	"log"
-	"sync"
 	"taskManager/database"
-	"taskManager/models"
+	"taskManager/domain"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type TaskService struct {
-	m sync.Mutex
+type TaskRepository interface {
+	Create(task *domain.Task) error
+	FindById(id primitive.ObjectID) (*domain.Task, error)
+	FindAll() ([]domain.Task, error)
+	UpdateById(id primitive.ObjectID, task *domain.Task) error
+	Delete(id primitive.ObjectID) error
 }
 
-func NewTaskService() *TaskService {
-	return &TaskService{}
+type taskRepo struct {
+	collection *mongo.Collection
 }
 
-func (taskService *TaskService) CreateTask(input models.TaskInput) models.Task {
-	task := models.Task{
-		Title:       input.Title,
-		Description: input.Description,
-		Status:      input.Status,
-	}
-
-	_, err := database.TaskCollection.InsertOne(context.TODO(), task)
-
-	if err != nil {
-		log.Printf("Error inserting task: %v", err)
-		return models.Task{}
-	}
-	return task
+func NewTaskRepository(db *mongo.Database) TaskRepository {
+	return &taskRepo{collection: db.Collection("tasks")}
 }
 
-func (taskService *TaskService) GetTask(id primitive.ObjectID) (models.Task, bool) {
+func (r *taskRepo) Create(task *domain.Task) error {
+	_, insertTaskErr := database.TaskCollection.InsertOne(context.TODO(), task)
+	return insertTaskErr
+}
+
+func (r *taskRepo) FindById(id primitive.ObjectID) (*domain.Task, error) {
 	filter := bson.M{"_id": id}
 	result := database.TaskCollection.FindOne(context.TODO(), filter)
 
-	if result.Err() != nil {
-		if errors.Is(result.Err(), mongo.ErrNoDocuments) {
-			return models.Task{}, false
-		}
-		log.Printf("Error finding task with ID: %v", result.Err())
-	}
-
-	var task models.Task
+	var task domain.Task
 	if err := result.Decode(&task); err != nil {
 		log.Printf("Error decoding task: %v", err)
-		return models.Task{}, false
+		return nil, err
 	}
-	return task, true
+	return &task, nil
 }
 
-func (taskService *TaskService) GetAllTasks() []models.Task {
-	var tasks []models.Task
-
+func (r *taskRepo) FindAll() ([]domain.Task, error) {
 	cursor, err := database.TaskCollection.Find(context.TODO(), bson.D{})
 
 	if err != nil {
 		log.Printf("Error finding all tasks: %v", err)
-		return nil
+		return nil, err
 	}
 
 	defer func() {
@@ -72,24 +59,20 @@ func (taskService *TaskService) GetAllTasks() []models.Task {
 		}
 	}()
 
+	var tasks []domain.Task
+
 	if err = cursor.All(context.TODO(), &tasks); err != nil {
 		log.Printf("Error decoding tasks: %v", err)
 		if cursorErr := cursor.Err(); cursorErr != nil {
 			log.Printf("Cursor iteration error: %v", cursorErr)
 		}
-		return nil
+		return nil, err
 	}
 
-	return tasks
+	return tasks, nil
 }
 
-func (taskService *TaskService) UpdateTask(input models.TaskInput, id primitive.ObjectID) (models.Task, bool) {
-	task := models.Task{
-		Title:       input.Title,
-		Description: input.Description,
-		Status:      input.Status,
-	}
-
+func (r *taskRepo) UpdateById(id primitive.ObjectID, task *domain.Task) error {
 	filter := bson.M{"_id": id}
 
 	update := bson.M{
@@ -100,17 +83,17 @@ func (taskService *TaskService) UpdateTask(input models.TaskInput, id primitive.
 
 	if err != nil {
 		log.Printf("Error updating task: %v", err)
-		return models.Task{}, false
+		return err
 	}
 
 	if result.ModifiedCount == 0 {
-		return models.Task{}, false
+		return errors.New("task not found")
 	}
 
-	return task, true
+	return nil
 }
 
-func (taskService *TaskService) DeleteTask(id primitive.ObjectID) error {
+func (r *taskRepo) Delete(id primitive.ObjectID) error {
 	filter := bson.M{"_id": id}
 
 	deletedTask, err := database.TaskCollection.DeleteOne(context.Background(), filter)

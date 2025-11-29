@@ -3,23 +3,23 @@ package controllers
 import (
 	"net/http"
 	"strings"
-	"taskManager/data"
-	"taskManager/models"
+	"taskManager/domain"
+	"taskManager/usecases"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type TaskController struct {
-	taskService *data.TaskService
+	taskUseCases usecases.TaskUseCases
 }
 
-func NewTaskController(taskService *data.TaskService) *TaskController {
-	return &TaskController{taskService: taskService}
+func NewTaskController(taskUseCases usecases.TaskUseCases) *TaskController {
+	return &TaskController{taskUseCases: taskUseCases}
 }
 
 func (taskController *TaskController) CreateTask(c *gin.Context) {
-	var newTask models.TaskInput
+	var newTask domain.TaskInput
 
 	if err := c.ShouldBindJSON(&newTask); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -44,7 +44,10 @@ func (taskController *TaskController) CreateTask(c *gin.Context) {
 		return
 	}
 
-	task := taskController.taskService.CreateTask(newTask)
+	task, err := taskController.taskUseCases.CreateTask(newTask)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
 	c.JSON(http.StatusCreated, gin.H{"data": task})
 }
 
@@ -57,9 +60,9 @@ func (taskController *TaskController) GetTask(c *gin.Context) {
 		return
 	}
 
-	task, exists := taskController.taskService.GetTask(id)
+	task, err := taskController.taskUseCases.GetTask(id)
 
-	if !exists {
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"message": "task with id " + idParam + " not found"})
 		return
 	}
@@ -68,7 +71,10 @@ func (taskController *TaskController) GetTask(c *gin.Context) {
 }
 
 func (taskController *TaskController) GetAllTasks(c *gin.Context) {
-	tasks := taskController.taskService.GetAllTasks()
+	tasks, err := taskController.taskUseCases.GetAllTasks()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
 	c.JSON(http.StatusOK, gin.H{"data": tasks})
 }
 
@@ -81,7 +87,7 @@ func (taskController *TaskController) UpdateTask(c *gin.Context) {
 		return
 	}
 
-	var taskInput models.TaskInput
+	var taskInput domain.TaskInput
 
 	if err := c.ShouldBindJSON(&taskInput); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -106,8 +112,8 @@ func (taskController *TaskController) UpdateTask(c *gin.Context) {
 		return
 	}
 
-	task, exists := taskController.taskService.UpdateTask(taskInput, id)
-	if !exists {
+	task, err := taskController.taskUseCases.UpdateTask(taskInput, id)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"message": "task with id " + idParam + " not found"})
 		return
 	}
@@ -124,7 +130,7 @@ func (taskController *TaskController) DeleteTask(c *gin.Context) {
 		return
 	}
 
-	err = taskController.taskService.DeleteTask(id)
+	err = taskController.taskUseCases.DeleteTask(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"message": "task with id " + idParam + " not found"})
 		return

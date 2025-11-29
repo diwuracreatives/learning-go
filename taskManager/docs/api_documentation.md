@@ -2,6 +2,8 @@
 
 ### Core Features
 ```
+Create an Account
+Login to account
 Add a task
 Update a task
 Remove a task

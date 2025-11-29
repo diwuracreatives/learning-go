@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+var db *mongo.Database
 var TaskCollection *mongo.Collection
 var UserCollection *mongo.Collection
 
@@ -20,12 +21,18 @@ func Setup() {
 		log.Fatal(dbErr)
 	}
 
-	TaskCollection = client.Database("taskdb").Collection("tasks")
-	UserCollection = client.Database("taskdb").Collection("users")
+	db = client.Database("taskdb")
+
+	TaskCollection = db.Collection("tasks")
+	UserCollection = db.Collection("users")
 
 	if TaskCollection == nil {
 		log.Fatal("Failed to create to task collection")
 	}
 
 	fmt.Printf("Connected to MongoDB database: %s", TaskCollection.Name())
+}
+
+func GetDB() *mongo.Database {
+	return db
 }
